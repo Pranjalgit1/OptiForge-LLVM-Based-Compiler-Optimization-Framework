@@ -174,4 +174,7 @@ References: [LLVM New Pass Manager](https://llvm.org/docs/NewPassManager.html),
 [LLVM Loop terminology](https://llvm.org/docs/LoopTerminology.html),
 [LLVM language reference](https://llvm.org/docs/LangRef.html).
 
-Phase 3 (custom constant folding) remains unimplemented until requested.
+Phases 3 and 4 now provide restricted custom transformations; see
+[their walkthrough](phases3-4.md). The Phase 2 hint contract remains unchanged:
+it deliberately omits flagged arithmetic, even when Phase 3 can prove a
+particular constant flagged operation safe to fold.

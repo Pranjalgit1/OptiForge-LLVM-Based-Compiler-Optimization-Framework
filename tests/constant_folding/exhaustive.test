@@ -1,0 +1,1 @@
+# RUN: %python %S/check_integer_semantics.py %opt %plugin %t

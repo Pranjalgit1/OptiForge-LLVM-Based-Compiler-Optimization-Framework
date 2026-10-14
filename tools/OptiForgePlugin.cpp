@@ -1,3 +1,5 @@
+#include "ConstantFoldingPass.h"
+#include "DeadCodeEliminationPass.h"
 #include "HelloPass.h"
 #include "IRAnalysisPass.h"
 
@@ -24,6 +26,10 @@ extern "C" LLVM_ATTRIBUTE_WEAK PassPluginLibraryInfo llvmGetPassPluginInfo() {
                     FPM.addPass(optiforge::HelloPass());
                   else if (Name == "optiforge-analyze")
                     FPM.addPass(optiforge::IRAnalysisPrinterPass());
+                  else if (Name == "optiforge-constant-folding")
+                    FPM.addPass(optiforge::ConstantFoldingPass());
+                  else if (Name == "optiforge-dce")
+                    FPM.addPass(optiforge::DeadCodeEliminationPass());
                   else
                     return false;
                   return true;

@@ -14,6 +14,7 @@ config.substitutions.extend([
     ("%FileCheck", shlex.quote(config.optiforge_filecheck)),
     ("%clangxx", shlex.quote(config.optiforge_clang)),
     ("%examples", shlex.quote(config.optiforge_examples)),
+    ("%python", shlex.quote(config.optiforge_python)),
 ])
 # Use the matching LLVM tools (including `not`) in RUN commands.
 config.environment["PATH"] = (

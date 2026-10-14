@@ -1,11 +1,11 @@
 # OptiForge
 
 An incremental educational compiler optimization framework using LLVM's New
-Pass Manager and C++17. **Current scope: Phases 1–2, plugin setup and IR analysis.**
-The framework reports per-function statistics, natural loops, and restricted
-optimization opportunity hints without changing IR. Constant folding, dead code
-elimination, loop invariant code motion, and benchmarks are planned for later
-phases and are not implemented.
+Pass Manager and C++17. **Current scope: Phases 1-4, analysis, constant folding,
+and dead code elimination.** The framework reports per-function statistics and
+natural loops, folds a restricted set of scalar integer operations, and removes
+supported trivially dead SSA computations. Loop invariant code motion, a named
+optimization pipeline, and benchmarks remain future phases.
 
 Phase 1 proves that a custom C++ pass can be compiled, loaded into `opt`, and
 scheduled on LLVM IR. The pass prints function names and leaves the program
@@ -15,6 +15,10 @@ transformations.
 Phase 2 adds a cached function analysis and the `optiforge-analyze` report pass.
 See [the Phase 2 walkthrough](docs/phase2.md) for basic blocks, operands, SSA,
 counting rules, opportunity limitations, and worked examples.
+
+Phases 3 and 4 add independent custom transformation passes. See
+[the transformation walkthrough](docs/phases3-4.md) for their algorithms,
+integer/poison semantics, safety boundaries, and correctness tests.
 
 ## Supported environment
 
@@ -126,6 +130,44 @@ The `single_loop` function has 4 arithmetic instructions, 4 basic blocks,
 are not semantic proofs or speedup predictions. The pass performs no folding,
 deletion, hoisting, or IR normalization.
 
+## Constant folding and dead code elimination
+
+Run either pass independently inside Ubuntu:
+
+```bash
+cmake --build build -j2
+/usr/lib/llvm-21/bin/opt \
+  -load-pass-plugin=./build/lib/OptiForgePlugin.so \
+  -passes=optiforge-constant-folding -verify-each -S \
+  tests/constant_folding/positive.ll -o build/folded.ll
+/usr/lib/llvm-21/bin/opt \
+  -load-pass-plugin=./build/lib/OptiForgePlugin.so \
+  -passes=optiforge-dce -verify-each -S \
+  tests/dead_code_elimination/chains.ll -o build/dce.ll
+```
+
+To check their interaction, list both passes explicitly:
+
+```bash
+/usr/lib/llvm-21/bin/opt \
+  -load-pass-plugin=./build/lib/OptiForgePlugin.so \
+  -passes='function(optiforge-constant-folding,optiforge-dce)' \
+  -verify-each -S tests/integration/folding-dce.ll -o build/folded-dce.ll
+```
+
+In the `example` function, `%result = add i32 10, 20` folds to `30`, and
+the unused arithmetic chain is deleted, leaving `ret i32 30`. Folding alone
+leaves nonconstant dead instructions; DCE alone does not fold constants.
+The `optnone` example remains unchanged: unlike diagnostic passes, our
+transforming passes respect the New Pass Manager's optimization opt-out.
+There is no named combined pipeline yet; that belongs to Phase 6.
+
+Folding supports scalar integer `add/sub/mul/and/or/xor` with literal integer
+operands, including provably safe `nsw`/`nuw` arithmetic. Unsupported cases and
+flag violations remain unchanged. DCE supports a limited set of pure SSA
+operations and preserves every memory operation, call, and terminator. Neither
+pass calls LLVM's existing optimization passes.
+
 ## Tests
 
 ```bash
@@ -146,6 +188,16 @@ preheaders; poison/undef; excluded flags and operations; unreachable blocks;
 and compilation plus analysis of both C++ examples. Analysis runs on `.ll` and
 `.bc` and preserves canonicalized IR byte for byte.
 
+Phases 3 and 4 add before/after checks for supported transformations, exact
+unchanged-IR checks for excluded operations, wrap and flag boundaries, i1/i128,
+reverse block order, deletion chains, live users, memory/call preservation,
+`optnone`, and analysis cache invalidation. An exhaustive Python oracle checks
+all 3,840 combinations of i4 inputs, supported opcodes, and applicable wrap
+flags. A compiled harness checks 100 input pairs against an unsigned C++
+reference for both baseline and transformed code, including an observable
+store. Both executables use the same Clang `-O0` settings; this is a correctness
+test, not a benchmark.
+
 Build the default target before running CTest. Ubuntu's `llvm-21-tools` provides
 lit at `/usr/lib/llvm-21/bin/lit`; another LLVM distribution may
 need `-DOPTIFORGE_LIT=/path/to/lit.py` at configuration time.
@@ -159,21 +211,26 @@ need `-DOPTIFORGE_LIT=/path/to/lit.py` at configuration time.
 | `lib/HelloPass.cpp` | Prints a function name and preserves every analysis |
 | `include/IRAnalysisPass.h` | Defines the cached statistics result and report pass |
 | `lib/IRAnalysisPass.cpp` | Counts instructions, queries LoopInfo, and reports hints |
+| `include/ConstantFoldingPass.h`, `lib/ConstantFoldingPass.cpp` | Custom restricted integer evaluation and dependent-user worklist |
+| `include/DeadCodeEliminationPass.h`, `lib/DeadCodeEliminationPass.cpp` | Restricted trivial DCE and producer worklist |
 | `tools/OptiForgePlugin.cpp` | Exports the plugin entry point and registers its pipeline name |
 | `scripts/setup_check.py` | Checks tool versions and development/test dependencies |
 | `tests/lit*.py*` | Configures LLVM's lit test runner and matching tool paths |
 | `tests/integration/*.ll` | Small IR examples and executable regression checks |
 | `tests/analysis/` | Deterministic analysis tests and C++ compilation checks |
+| `tests/constant_folding/`, `tests/dead_code_elimination/` | Transformation edge cases and integer oracle |
 | `examples/*.cpp` | Arithmetic, branch, single-loop, and nested-loop source examples |
 | `docs/phase1.md` | Explains registration, preservation, and troubleshooting |
 | `docs/environment.md` | Records the observed tool versions and Phase 1 validation |
 | `docs/phase2.md` | Explains IR, analysis APIs, counting rules, and limitations |
+| `docs/phases3-4.md` | Explains transformation algorithms, semantics, and limitations |
 
 `PassInfoMixin` supplies the boilerplate expected by the New Pass Manager.
 `run()` is called for each defined function. `PassBuilder` maps the name
 `optiforge-hello` to our pass. `llvmGetPassPluginInfo()` is the entry point `opt`
 loads from the shared library. `PreservedAnalyses::all()` tells LLVM that this
-pass changed nothing. These mechanisms will later host our own transformations.
+pass changed nothing. Transformations return `PreservedAnalyses::none()` when
+they change instructions, conservatively invalidating cached statistics.
 
 ## References
 
@@ -181,4 +238,4 @@ pass changed nothing. These mechanisms will later host our own transformations.
 - [LLVM: Using the New Pass Manager](https://llvm.org/docs/NewPassManager.html)
 - [Ubuntu: available LLVM/Clang versions](https://ubuntu.com/developers/docs/reference/availability/llvm/)
 
-Phases 1 and 2 are implemented. Subsequent phases require an explicit request.
+Phases 1-4 are implemented. Subsequent phases require an explicit request.
