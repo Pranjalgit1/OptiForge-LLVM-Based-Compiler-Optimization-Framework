@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(OptiForge VERSION 0.1.0 LANGUAGES C CXX)
+project(OptiForge VERSION 0.2.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -8,7 +8,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 find_package(LLVM REQUIRED CONFIG)
 if(NOT LLVM_VERSION_MAJOR EQUAL 21)
-  message(FATAL_ERROR "OptiForge Phase 1 supports LLVM 21 only")
+  message(FATAL_ERROR "OptiForge supports LLVM 21 only")
 endif()
 if(NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR
    NOT CMAKE_CXX_COMPILER_VERSION VERSION_EQUAL LLVM_PACKAGE_VERSION)
@@ -24,6 +24,7 @@ add_definitions(${LLVM_DEFINITIONS})
 
 add_llvm_pass_plugin(OptiForgePlugin
   lib/HelloPass.cpp
+  lib/IRAnalysisPass.cpp
   tools/OptiForgePlugin.cpp
 )
 target_include_directories(OptiForgePlugin PRIVATE "${PROJECT_SOURCE_DIR}/include")

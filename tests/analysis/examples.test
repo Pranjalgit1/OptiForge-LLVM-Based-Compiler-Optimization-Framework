@@ -1,0 +1,20 @@
+# RUN: %clangxx -std=c++17 -O0 -S -emit-llvm %examples/arithmetic.cpp -o %t.arithmetic.ll
+# RUN: %opt -load-pass-plugin=%plugin -passes=optiforge-analyze -verify-each -disable-output %t.arithmetic.ll 2>&1 | %FileCheck %s --check-prefix=ARITH
+# RUN: %clangxx -std=c++17 -O0 -S -emit-llvm %examples/loops.cpp -o %t.loops.ll
+# RUN: %opt -load-pass-plugin=%plugin -passes=optiforge-analyze -verify-each -disable-output %t.loops.ll 2>&1 | %FileCheck %s --check-prefix=LOOPS
+# ARITH-LABEL: Function: arithmetic
+# ARITH: Arithmetic instructions: 3
+# ARITH-NEXT: Loops detected: 0
+# ARITH: End function: arithmetic
+# ARITH-LABEL: Function: choose
+# ARITH: Arithmetic instructions: 2
+# ARITH-NEXT: Loops detected: 0
+# ARITH: End function: choose
+# LOOPS-LABEL: Function: sum_array
+# LOOPS: Loops detected: 1
+# LOOPS-NEXT: Maximum loop depth: 1
+# LOOPS: End function: sum_array
+# LOOPS-LABEL: Function: nested_sum
+# LOOPS: Loops detected: 2
+# LOOPS-NEXT: Maximum loop depth: 2
+# LOOPS: End function: nested_sum

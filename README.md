@@ -1,14 +1,20 @@
 # OptiForge
 
 An incremental educational compiler optimization framework using LLVM's New
-Pass Manager and C++17. **Current scope: Phase 1, environment and plugin setup.**
-Constant folding, dead code elimination, loop invariant code motion, analysis
-reports, and benchmarks are planned for later phases and are not implemented.
+Pass Manager and C++17. **Current scope: Phases 1–2, plugin setup and IR analysis.**
+The framework reports per-function statistics, natural loops, and restricted
+optimization opportunity hints without changing IR. Constant folding, dead code
+elimination, loop invariant code motion, and benchmarks are planned for later
+phases and are not implemented.
 
 Phase 1 proves that a custom C++ pass can be compiled, loaded into `opt`, and
 scheduled on LLVM IR. The pass prints function names and leaves the program
 unchanged. This establishes the build and testing foundation for later custom
 transformations.
+
+Phase 2 adds a cached function analysis and the `optiforge-analyze` report pass.
+See [the Phase 2 walkthrough](docs/phase2.md) for basic blocks, operands, SSA,
+counting rules, opportunity limitations, and worked examples.
 
 ## Supported environment
 
@@ -87,6 +93,39 @@ To write textual LLVM IR, replace `-disable-output` with
 output is bitcode. Function diagnostics go to standard error so they do not
 contaminate IR output.
 
+## Analyze C++ and LLVM IR
+
+After building, run these commands inside Ubuntu:
+
+```bash
+/usr/lib/llvm-21/bin/clang++ -std=c++17 -O0 -S -emit-llvm \
+  examples/arithmetic.cpp -o build/arithmetic.ll
+/usr/lib/llvm-21/bin/clang++ -std=c++17 -O0 -S -emit-llvm \
+  examples/loops.cpp -o build/loops.ll
+/usr/lib/llvm-21/bin/opt \
+  -load-pass-plugin=./build/lib/OptiForgePlugin.so \
+  -passes='function(optiforge-analyze)' -verify-each \
+  -disable-output build/loops.ll
+```
+
+`sum_array` reports one loop; `nested_sum` reports two loops with maximum
+depth two. At `-O0`, source locals are usually represented by stack loads and
+stores. Our restricted integer hints do not look through memory, so zero hints
+on these examples are expected. Source constants can already be folded by
+Clang; use the hand-written IR fixtures to see deterministic opportunities:
+
+```bash
+/usr/lib/llvm-21/bin/opt \
+  -load-pass-plugin=./build/lib/OptiForgePlugin.so \
+  -passes=optiforge-analyze -verify-each \
+  -disable-output tests/analysis/loops.ll
+```
+
+The `single_loop` function has 4 arithmetic instructions, 4 basic blocks,
+1 loop, and 2 unique potential opportunity instructions. Hints can overlap and
+are not semantic proofs or speedup predictions. The pass performs no folding,
+deletion, hoisting, or IR normalization.
+
 ## Tests
 
 ```bash
@@ -101,6 +140,12 @@ unknown pass name, IR verification, and exact comparison against canonicalized
 unchanged IR. FileCheck verifies diagnostic output. No performance claims are
 made, and no optimization pass is invoked by the custom implementation.
 
+Phase 2 tests additionally check exact arithmetic, instruction, block, loop,
+depth, and opportunity counts on hand-written IR; nested loops; missing
+preheaders; poison/undef; excluded flags and operations; unreachable blocks;
+and compilation plus analysis of both C++ examples. Analysis runs on `.ll` and
+`.bc` and preserves canonicalized IR byte for byte.
+
 Build the default target before running CTest. Ubuntu's `llvm-21-tools` provides
 lit at `/usr/lib/llvm-21/bin/lit`; another LLVM distribution may
 need `-DOPTIFORGE_LIT=/path/to/lit.py` at configuration time.
@@ -112,12 +157,17 @@ need `-DOPTIFORGE_LIT=/path/to/lit.py` at configuration time.
 | `CMakeLists.txt` | Finds LLVM, checks Clang version, builds the plugin, wires lit/CTest |
 | `include/HelloPass.h` | Declares the minimal function pass |
 | `lib/HelloPass.cpp` | Prints a function name and preserves every analysis |
+| `include/IRAnalysisPass.h` | Defines the cached statistics result and report pass |
+| `lib/IRAnalysisPass.cpp` | Counts instructions, queries LoopInfo, and reports hints |
 | `tools/OptiForgePlugin.cpp` | Exports the plugin entry point and registers its pipeline name |
 | `scripts/setup_check.py` | Checks tool versions and development/test dependencies |
 | `tests/lit*.py*` | Configures LLVM's lit test runner and matching tool paths |
 | `tests/integration/*.ll` | Small IR examples and executable regression checks |
+| `tests/analysis/` | Deterministic analysis tests and C++ compilation checks |
+| `examples/*.cpp` | Arithmetic, branch, single-loop, and nested-loop source examples |
 | `docs/phase1.md` | Explains registration, preservation, and troubleshooting |
 | `docs/environment.md` | Records the observed tool versions and Phase 1 validation |
+| `docs/phase2.md` | Explains IR, analysis APIs, counting rules, and limitations |
 
 `PassInfoMixin` supplies the boilerplate expected by the New Pass Manager.
 `run()` is called for each defined function. `PassBuilder` maps the name
@@ -131,4 +181,4 @@ pass changed nothing. These mechanisms will later host our own transformations.
 - [LLVM: Using the New Pass Manager](https://llvm.org/docs/NewPassManager.html)
 - [Ubuntu: available LLVM/Clang versions](https://ubuntu.com/developers/docs/reference/availability/llvm/)
 
-Stop after Phase 1; subsequent phases require an explicit request.
+Phases 1 and 2 are implemented. Subsequent phases require an explicit request.
