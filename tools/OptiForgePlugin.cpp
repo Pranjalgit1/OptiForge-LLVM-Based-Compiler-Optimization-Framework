@@ -5,8 +5,11 @@
 #include "LoopInvariantCodeMotionPass.h"
 
 #include "llvm/Config/llvm-config.h"
+#include "llvm/IR/Verifier.h"
 #include "llvm/Passes/PassBuilder.h"
 #include "llvm/Passes/PassPlugin.h"
+
+#include <utility>
 
 using namespace llvm;
 
@@ -17,6 +20,19 @@ extern "C" LLVM_ATTRIBUTE_WEAK PassPluginLibraryInfo llvmGetPassPluginInfo() {
             PB.registerAnalysisRegistrationCallback(
                 [](FunctionAnalysisManager &AM) {
                   AM.registerPass([] { return optiforge::IRAnalysis(); });
+                });
+            PB.registerPipelineParsingCallback(
+                [](StringRef Name, ModulePassManager &MPM,
+                   ArrayRef<PassBuilder::PipelineElement> InnerPipeline) {
+                  if (Name != "optiforge" || !InnerPipeline.empty())
+                    return false;
+                  FunctionPassManager FPM;
+                  FPM.addPass(optiforge::ConstantFoldingPass());
+                  FPM.addPass(optiforge::DeadCodeEliminationPass());
+                  FPM.addPass(optiforge::LoopInvariantCodeMotionPass());
+                  MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
+                  MPM.addPass(VerifierPass());
+                  return true;
                 });
             PB.registerPipelineParsingCallback(
                 [](StringRef Name, FunctionPassManager &FPM,

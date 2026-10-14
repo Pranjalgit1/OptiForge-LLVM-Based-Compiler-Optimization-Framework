@@ -1,11 +1,12 @@
 # OptiForge
 
 An incremental educational compiler optimization framework using LLVM's New
-Pass Manager and C++17. **Current scope: Phases 1-5, analysis, constant folding,
+Pass Manager and C++17. **Current scope: Phases 1-6, analysis, constant folding,
 dead code elimination, and restricted LICM.** The framework reports per-function statistics and
 natural loops, folds a restricted set of scalar integer operations, and removes
 supported trivially dead SSA computations, and hoists safe integer invariants.
-A named optimization pipeline and benchmarks remain future phases.
+The named `optiforge` pipeline composes these passes and verifies output IR.
+Benchmarks remain a future phase.
 
 Phase 1 proves that a custom C++ pass can be compiled, loaded into `opt`, and
 scheduled on LLVM IR. The pass prints function names and leaves the program
@@ -160,7 +161,8 @@ the unused arithmetic chain is deleted, leaving `ret i32 30`. Folding alone
 leaves nonconstant dead instructions; DCE alone does not fold constants.
 The `optnone` example remains unchanged: unlike diagnostic passes, our
 transforming passes respect the New Pass Manager's optimization opt-out.
-There is no named combined pipeline yet; that belongs to Phase 6.
+The equivalent named module pipeline is `-passes=optiforge`; it also appends
+LLVM's verifier. See [Phase 6](docs/phase6.md) for `.ll`/`.bc` commands and tests.
 
 Folding supports scalar integer `add/sub/mul/and/or/xor` with literal integer
 operands, including provably safe `nsw`/`nuw` arithmetic. Unsupported cases and
@@ -255,4 +257,4 @@ they change instructions, conservatively invalidating cached statistics.
 - [LLVM: Using the New Pass Manager](https://llvm.org/docs/NewPassManager.html)
 - [Ubuntu: available LLVM/Clang versions](https://ubuntu.com/developers/docs/reference/availability/llvm/)
 
-Phases 1-5 are implemented. Subsequent phases require an explicit request.
+Phases 1-6 are implemented. Subsequent phases require an explicit request.

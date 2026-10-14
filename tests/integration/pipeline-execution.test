@@ -1,0 +1,6 @@
+# RUN: %opt -load-pass-plugin=%plugin -passes=optiforge -verify-each -S %S/../licm/hoist.ll -o %t.optimized.ll
+# RUN: %clangxx -std=c++17 -O0 %S/../licm/Inputs/correctness.cpp %S/../licm/hoist.ll -o %t.baseline
+# RUN: %clangxx -std=c++17 -O0 %S/../licm/Inputs/correctness.cpp %t.optimized.ll -o %t.optimized
+# RUN: %t.baseline > %t.baseline.txt
+# RUN: %t.optimized > %t.optimized.txt
+# RUN: diff %t.baseline.txt %t.optimized.txt
