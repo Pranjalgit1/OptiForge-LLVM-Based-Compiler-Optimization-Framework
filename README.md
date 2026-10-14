@@ -1,12 +1,12 @@
 # OptiForge
 
 An incremental educational compiler optimization framework using LLVM's New
-Pass Manager and C++17. **Current scope: Phases 1-6, analysis, constant folding,
+Pass Manager and C++17. **Current scope: Phases 1-7, analysis, constant folding,
 dead code elimination, and restricted LICM.** The framework reports per-function statistics and
 natural loops, folds a restricted set of scalar integer operations, and removes
 supported trivially dead SSA computations, and hoists safe integer invariants.
 The named `optiforge` pipeline composes these passes and verifies output IR.
-Benchmarks remain a future phase.
+Reproducible Python benchmarks compare matched baseline/custom pairs.
 
 Phase 1 proves that a custom C++ pass can be compiled, loaded into `opt`, and
 scheduled on LLVM IR. The pass prints function names and leaves the program
@@ -185,6 +185,21 @@ the insertion point, dominance, and LLVM's speculation-safety predicate. No
 loads, stores, calls, shifts, divisions, FP, or vector arithmetic are hoisted.
 See [Phase 5](docs/phase5.md) for the safety argument and nested-loop behavior.
 
+## Benchmarks and measured results
+
+```bash
+python3 benchmarks/run_benchmarks.py --output results/local-run
+```
+
+The [methodology](docs/benchmarking.md) explains matched flags, correctness
+checks, calibration, medians, and MAD. The committed [measured report](results/phase7/report.md)
+includes raw CSV samples and environment metadata. On the recorded i5-13500HX
+WSL run, controlled comparisons showed approximately 1-18% lower median runtime;
+the artificial repeated-arithmetic fixture had the largest change. These
+observations are not claims of superiority over optimized production compilers.
+All four standard `-O2` object pairs were byte-identical; small measured timing
+differences there are noise, not added optimization benefit.
+
 ## Tests
 
 ```bash
@@ -257,4 +272,4 @@ they change instructions, conservatively invalidating cached statistics.
 - [LLVM: Using the New Pass Manager](https://llvm.org/docs/NewPassManager.html)
 - [Ubuntu: available LLVM/Clang versions](https://ubuntu.com/developers/docs/reference/availability/llvm/)
 
-Phases 1-6 are implemented. Subsequent phases require an explicit request.
+Phases 1-7 are implemented. Phase 8 completes release documentation and CI.

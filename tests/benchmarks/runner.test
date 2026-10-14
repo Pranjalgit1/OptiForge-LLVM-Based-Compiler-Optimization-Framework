@@ -1,0 +1,1 @@
+# RUN: %python %S/../../benchmarks/test_benchmarks.py %plugin

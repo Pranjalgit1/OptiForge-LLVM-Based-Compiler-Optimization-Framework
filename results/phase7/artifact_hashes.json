@@ -1,0 +1,18 @@
+{
+  "array": {
+    "baseline": "d16a643b36c96b617eff2fe800b52a3bb7da903be1caeb54b0c4102c3e5caf95",
+    "custom": "d16a643b36c96b617eff2fe800b52a3bb7da903be1caeb54b0c4102c3e5caf95"
+  },
+  "numerical": {
+    "baseline": "a0db2fae3e168214883fe95f2de8ab92c8ac01ceb106a96fa29c1fe8f699745e",
+    "custom": "a0db2fae3e168214883fe95f2de8ab92c8ac01ceb106a96fa29c1fe8f699745e"
+  },
+  "nested": {
+    "baseline": "e66a61d2f6e0d6cdd7c44c9b9fc4fd989f23262027f2d3d96d7f939c77037712",
+    "custom": "e66a61d2f6e0d6cdd7c44c9b9fc4fd989f23262027f2d3d96d7f939c77037712"
+  },
+  "repeated_arithmetic": {
+    "baseline": "1cfbd9f888c4bf5ea16c429a68b202a4ce05b98c329beb39507ab7507d5f72ba",
+    "custom": "1cfbd9f888c4bf5ea16c429a68b202a4ce05b98c329beb39507ab7507d5f72ba"
+  }
+}

@@ -2,5 +2,11 @@
 __pycache__/
 *.pyc
 /.venv/
-/results/*
+/results/**
 !/results/.gitkeep
+!/results/phase7/
+!/results/phase7/summary.csv
+!/results/phase7/samples.csv
+!/results/phase7/metadata.json
+!/results/phase7/artifact_hashes.json
+!/results/phase7/report.md
