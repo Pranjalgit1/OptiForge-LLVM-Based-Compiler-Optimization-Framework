@@ -1,0 +1,19 @@
+# RUN: %opt -load-pass-plugin=%plugin -passes=optiforge-licm -verify-each -S %S/../analysis/loops.ll | %FileCheck %s
+# CHECK-LABEL: define void @single_loop(
+# CHECK: entry:
+# CHECK-NEXT: %invariant = mul i32 %a, %b
+# CHECK-NEXT: %chain = add i32 %invariant, 1
+# CHECK-NEXT: br label %header
+# CHECK: body:
+# CHECK-NEXT: %constant = add i32 2, 3
+# CHECK-NEXT: store i32 %chain, ptr %out
+# CHECK-LABEL: define void @nested(
+# CHECK: inner.entry:
+# CHECK-NEXT: %relative = mul i32 %i, 2
+# CHECK-NEXT: br label %inner
+# CHECK: inner.body:
+# CHECK-NEXT: store i32 %relative, ptr %out
+# CHECK-LABEL: define i32 @no_preheader(
+# CHECK: header:
+# CHECK-NEXT: %invariant = mul i32 %a, %b
+# CHECK-NEXT: br i1 %again, label %header, label %exit

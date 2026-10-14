@@ -174,4 +174,4 @@ References: [LLVM language reference](https://llvm.org/docs/LangRef.html),
 [APInt](https://llvm.org/doxygen/classllvm_1_1APInt.html),
 [LLVM local transformation utilities](https://llvm.org/doxygen/Transforms_2Utils_2Local_8h.html).
 
-Phase 5 (LICM) and the Phase 6 named pipeline remain unimplemented.
+See [Phase 5](phase5.md) for the subsequently added conservative LICM pass.

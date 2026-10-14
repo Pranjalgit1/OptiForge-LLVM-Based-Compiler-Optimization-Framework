@@ -1,11 +1,11 @@
 # OptiForge
 
 An incremental educational compiler optimization framework using LLVM's New
-Pass Manager and C++17. **Current scope: Phases 1-4, analysis, constant folding,
-and dead code elimination.** The framework reports per-function statistics and
+Pass Manager and C++17. **Current scope: Phases 1-5, analysis, constant folding,
+dead code elimination, and restricted LICM.** The framework reports per-function statistics and
 natural loops, folds a restricted set of scalar integer operations, and removes
-supported trivially dead SSA computations. Loop invariant code motion, a named
-optimization pipeline, and benchmarks remain future phases.
+supported trivially dead SSA computations, and hoists safe integer invariants.
+A named optimization pipeline and benchmarks remain future phases.
 
 Phase 1 proves that a custom C++ pass can be compiled, loaded into `opt`, and
 scheduled on LLVM IR. The pass prints function names and leaves the program
@@ -168,6 +168,21 @@ flag violations remain unchanged. DCE supports a limited set of pure SSA
 operations and preserves every memory operation, call, and terminator. Neither
 pass calls LLVM's existing optimization passes.
 
+## Loop-invariant code motion
+
+```bash
+/usr/lib/llvm-21/bin/opt \
+  -load-pass-plugin=./build/lib/OptiForgePlugin.so \
+  -passes=optiforge-licm -verify-each -S \
+  tests/licm/hoist.ll -o build/hoisted.ll
+```
+
+LICM supports used scalar `add/sub/mul/and/or/xor` without poison-generating
+flags. It requires an existing loop preheader, invariant operands available at
+the insertion point, dominance, and LLVM's speculation-safety predicate. No
+loads, stores, calls, shifts, divisions, FP, or vector arithmetic are hoisted.
+See [Phase 5](docs/phase5.md) for the safety argument and nested-loop behavior.
+
 ## Tests
 
 ```bash
@@ -224,6 +239,8 @@ need `-DOPTIFORGE_LIT=/path/to/lit.py` at configuration time.
 | `docs/environment.md` | Records the observed tool versions and Phase 1 validation |
 | `docs/phase2.md` | Explains IR, analysis APIs, counting rules, and limitations |
 | `docs/phases3-4.md` | Explains transformation algorithms, semantics, and limitations |
+| `include/LoopInvariantCodeMotionPass.h`, `lib/LoopInvariantCodeMotionPass.cpp` | Custom conservative LICM |
+| `tests/licm/`, `docs/phase5.md` | LICM correctness cases and safety explanation |
 
 `PassInfoMixin` supplies the boilerplate expected by the New Pass Manager.
 `run()` is called for each defined function. `PassBuilder` maps the name
@@ -238,4 +255,4 @@ they change instructions, conservatively invalidating cached statistics.
 - [LLVM: Using the New Pass Manager](https://llvm.org/docs/NewPassManager.html)
 - [Ubuntu: available LLVM/Clang versions](https://ubuntu.com/developers/docs/reference/availability/llvm/)
 
-Phases 1-4 are implemented. Subsequent phases require an explicit request.
+Phases 1-5 are implemented. Subsequent phases require an explicit request.

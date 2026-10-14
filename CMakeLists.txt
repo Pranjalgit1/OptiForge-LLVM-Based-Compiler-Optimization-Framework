@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(OptiForge VERSION 0.4.0 LANGUAGES C CXX)
+project(OptiForge VERSION 0.5.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -27,6 +27,7 @@ add_llvm_pass_plugin(OptiForgePlugin
   lib/IRAnalysisPass.cpp
   lib/ConstantFoldingPass.cpp
   lib/DeadCodeEliminationPass.cpp
+  lib/LoopInvariantCodeMotionPass.cpp
   tools/OptiForgePlugin.cpp
 )
 target_include_directories(OptiForgePlugin PRIVATE "${PROJECT_SOURCE_DIR}/include")

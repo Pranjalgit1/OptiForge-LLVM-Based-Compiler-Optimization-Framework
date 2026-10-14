@@ -2,6 +2,7 @@
 #include "DeadCodeEliminationPass.h"
 #include "HelloPass.h"
 #include "IRAnalysisPass.h"
+#include "LoopInvariantCodeMotionPass.h"
 
 #include "llvm/Config/llvm-config.h"
 #include "llvm/Passes/PassBuilder.h"
@@ -30,6 +31,8 @@ extern "C" LLVM_ATTRIBUTE_WEAK PassPluginLibraryInfo llvmGetPassPluginInfo() {
                     FPM.addPass(optiforge::ConstantFoldingPass());
                   else if (Name == "optiforge-dce")
                     FPM.addPass(optiforge::DeadCodeEliminationPass());
+                  else if (Name == "optiforge-licm")
+                    FPM.addPass(optiforge::LoopInvariantCodeMotionPass());
                   else
                     return false;
                   return true;
