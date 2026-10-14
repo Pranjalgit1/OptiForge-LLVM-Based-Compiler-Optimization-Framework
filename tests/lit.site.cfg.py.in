@@ -1,0 +1,6 @@
+config.optiforge_plugin = r"@PROJECT_BINARY_DIR@/lib/OptiForgePlugin@CMAKE_SHARED_MODULE_SUFFIX@"
+config.optiforge_opt = r"@OPTIFORGE_OPT@"
+config.optiforge_filecheck = r"@OPTIFORGE_FILECHECK@"
+config.optiforge_source_tests = r"@PROJECT_SOURCE_DIR@/tests"
+config.optiforge_exec_tests = r"@PROJECT_BINARY_DIR@/tests"
+lit_config.load_config(config, r"@PROJECT_SOURCE_DIR@/tests/lit.cfg.py")
