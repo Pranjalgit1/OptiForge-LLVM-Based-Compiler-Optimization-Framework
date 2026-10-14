@@ -1,275 +1,276 @@
 # OptiForge
 
-An incremental educational compiler optimization framework using LLVM's New
-Pass Manager and C++17. **Current scope: Phases 1-7, analysis, constant folding,
-dead code elimination, and restricted LICM.** The framework reports per-function statistics and
-natural loops, folds a restricted set of scalar integer operations, and removes
-supported trivially dead SSA computations, and hoists safe integer invariants.
-The named `optiforge` pipeline composes these passes and verifies output IR.
-Reproducible Python benchmarks compare matched baseline/custom pairs.
+[![LLVM 21 build and tests](https://github.com/Pranjalgit1/OptiForge-LLVM-Based-Compiler-Optimization-Framework/actions/workflows/ci.yml/badge.svg)](https://github.com/Pranjalgit1/OptiForge-LLVM-Based-Compiler-Optimization-Framework/actions/workflows/ci.yml)
 
-Phase 1 proves that a custom C++ pass can be compiled, loaded into `opt`, and
-scheduled on LLVM IR. The pass prints function names and leaves the program
-unchanged. This establishes the build and testing foundation for later custom
-transformations.
+## Overview
 
-Phase 2 adds a cached function analysis and the `optiforge-analyze` report pass.
-See [the Phase 2 walkthrough](docs/phase2.md) for basic blocks, operands, SSA,
-counting rules, opportunity limitations, and worked examples.
+OptiForge is an educational LLVM compiler optimization framework written in
+C++17. It loads into `opt`, analyzes LLVM IR, runs three custom transformations,
+and verifies the output. A Python benchmark runner checks matched executables
+and reports actual measurements with raw samples and toolchain provenance.
 
-Phases 3 and 4 add independent custom transformation passes. See
-[the transformation walkthrough](docs/phases3-4.md) for their algorithms,
-integer/poison semantics, safety boundaries, and correctness tests.
+**Version 0.8.0: all eight planned phases are implemented.** The supported
+transformations are deliberately restricted; this is a compiler engineering
+learning project, not a replacement for LLVM's production optimizers.
 
-## Supported environment
+## Motivation
 
-The initial setup uses Windows 11 x64 with **Ubuntu 26.04 under WSL2**. Run all
-commands below inside Ubuntu. The files remain in the existing Windows project
-directory; a separate nested `OptiForge/` directory is unnecessary.
+An optimization must preserve program semantics before its speed matters.
+This project makes that work visible: integer width and overflow promises,
+poison and undef, SSA use chains, side effects, loop preheaders, dominance,
+speculation safety, analysis invalidation, and fair performance comparisons.
+The implementations own their transformation algorithms rather than calling
+LLVM's existing constant folding, DCE, or LICM passes.
 
-Use **LLVM and Clang 21.1.8** from the same Ubuntu package build. LLVM 21 is a
-deliberate stable project baseline, not a claim about the latest LLVM release.
-Ubuntu 26.04 provides LLVM 21 as its default major version. Use versioned
-packages and explicit tool paths rather than relying on a global `opt` alias.
-The project requires C++17, CMake 3.20+, Ninja, Python 3.8+, Git, FileCheck, and
-lit. LLVM's development headers and libraries are required in addition to Clang.
+## Tech Stack
 
-This setup builds a Linux `.so` plugin loaded by Linux `opt` inside WSL; native
-Windows plugin builds are not part of the tested configuration.
+| Component | Supported configuration |
+| --- | --- |
+| Language | C++17 |
+| Infrastructure | LLVM 21, New Pass Manager; locally verified with 21.1.8 |
+| Compiler | Clang from the same LLVM installation and upstream version |
+| Build | CMake 3.20+ and Ninja |
+| Tests | LLVM lit, FileCheck, verifier, Python oracle, C++ execution checks |
+| Benchmarking | Python 3.8+ standard library; C++ steady-clock timing |
+| Platform | Linux x86_64; locally tested on Ubuntu 26.04 under Windows WSL2 |
 
-## Install dependencies
+Native Windows `.dll` plugin builds are outside the tested configuration. The
+Windows checkout can remain on the mounted drive while every LLVM tool runs
+inside Ubuntu. Do not mix Linux plugins with Windows `opt.exe`.
 
-Open Ubuntu from PowerShell:
+## Architecture
+
+```mermaid
+flowchart LR
+    Input[LLVM .ll or .bc] --> Opt[opt loads OptiForgePlugin]
+    Opt --> Fold[Custom constant folding]
+    Fold --> DCE[Custom DCE]
+    DCE --> LICM[Custom LICM]
+    LICM --> Verify[LLVM module verifier]
+    Verify --> Output[Transformed .ll or .bc]
+    Opt --> Analyze[Read-only IR report]
+```
+
+`tools/OptiForgePlugin.cpp` registers independent function passes and the named
+`optiforge` module pipeline. The function analysis manager supplies LoopInfo,
+dominance, and our cached statistics. Each transformation invalidates analyses
+conservatively when it changes IR.
+
+```text
+include/       Pass declarations and analysis result
+lib/           Custom analysis and transformation implementations
+tools/         Plugin entry point and pipeline registration
+tests/         lit/FileCheck, semantic oracle, and executable checks
+examples/      Small C++ arithmetic and loop examples
+benchmarks/    Four workloads, driver, and Python runner
+scripts/       Environment prerequisite checker
+results/phase7/ Committed measurements and provenance; binaries excluded
+docs/          Architecture, safety, methodology, and interview notes
+```
+
+See [architecture](docs/architecture.md) and [optimization contracts](docs/optimizations.md).
+
+## Installation
+
+On Windows, open the installed Ubuntu distribution:
 
 ```powershell
 wsl -d Ubuntu
 ```
 
-Inside Ubuntu:
+Inside Ubuntu 26.04:
 
 ```bash
 sudo apt-get update
 sudo apt-get install -y clang-21 llvm-21-dev llvm-21-tools cmake ninja-build python3 git
-cd /mnt/c/Users/pranj/Desktop/projects/compiler
+git clone https://github.com/Pranjalgit1/OptiForge-LLVM-Based-Compiler-Optimization-Framework.git
+cd OptiForge-LLVM-Based-Compiler-Optimization-Framework
 python3 scripts/setup_check.py
-```
 
-APT may offer newer package revisions over time. Keep the LLVM, Clang, and tools
-packages synchronized, then rebuild the plugin after a toolchain update. The
-setup checker requires identical upstream versions for all four LLVM tools.
-Successful plugin loading in tests is the runtime ABI check; a version number
-alone cannot guarantee compatibility with arbitrary custom LLVM builds.
-
-## Build and execute
-
-```bash
 cmake -S . -B build -G Ninja \
-  -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+  -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_C_COMPILER=/usr/lib/llvm-21/bin/clang \
   -DCMAKE_CXX_COMPILER=/usr/lib/llvm-21/bin/clang++ \
   -DLLVM_DIR=/usr/lib/llvm-21/lib/cmake/llvm
 cmake --build build -j2
-
-/usr/lib/llvm-21/bin/opt \
-  -load-pass-plugin=./build/lib/OptiForgePlugin.so \
-  -passes='function(optiforge-hello)' -verify-each \
-  -disable-output tests/integration/hello.ll
 ```
 
-Expected diagnostic output:
+For the existing development checkout, use
+`cd /mnt/c/Users/pranj/Desktop/projects/compiler` instead of cloning again.
+`llvm-21-dev` supplies headers/libraries; Clang alone is insufficient. The setup
+checker checks matching tool versions; successful plugin loading is the runtime
+ABI check. Rebuild after updating the LLVM packages. See
+[environment details](docs/environment.md) and [troubleshooting](docs/phase1.md).
+Other distributions may need `-DOPTIFORGE_LIT=/path/to/lit.py` at configuration.
 
-```text
-OptiForge: hello from main
-OptiForge: hello from unoptimized
-```
+## Usage
 
-To write textual LLVM IR, replace `-disable-output` with
-`-S -o build/hello.out.ll`. To test bitcode:
+Run the complete pipeline and write verified textual IR:
 
 ```bash
-/usr/lib/llvm-21/bin/opt tests/integration/hello.ll -o build/hello.bc
 /usr/lib/llvm-21/bin/opt \
   -load-pass-plugin=./build/lib/OptiForgePlugin.so \
-  -passes=optiforge-hello -verify-each \
-  build/hello.bc -o build/hello.out.bc
+  -passes=optiforge -verify-each -S \
+  tests/integration/pipeline.ll -o build/optimized.ll
 ```
 
-`opt` accepts `.ll` text and `.bc` bitcode. `-S` selects text output; otherwise
-output is bitcode. Function diagnostics go to standard error so they do not
-contaminate IR output.
-
-## Analyze C++ and LLVM IR
-
-After building, run these commands inside Ubuntu:
+For bitcode, omit `-S`; `opt` accepts either `.ll` or `.bc` input:
 
 ```bash
-/usr/lib/llvm-21/bin/clang++ -std=c++17 -O0 -S -emit-llvm \
-  examples/arithmetic.cpp -o build/arithmetic.ll
+/usr/lib/llvm-21/bin/opt tests/integration/pipeline.ll -o build/input.bc
+/usr/lib/llvm-21/bin/opt \
+  -load-pass-plugin=./build/lib/OptiForgePlugin.so \
+  -passes=optiforge -verify-each build/input.bc -o build/output.bc
+```
+
+Each pass is independently selectable through `-passes`:
+
+| Name | Behavior |
+| --- | --- |
+| `optiforge-hello` | Minimal diagnostic plugin smoke test |
+| `optiforge-analyze` | Function/block/instruction/loop counts and opportunity hints |
+| `optiforge-constant-folding` | Supported constant integer operations |
+| `optiforge-dce` | Supported trivially dead SSA computations |
+| `optiforge-licm` | Supported safe loop-invariant arithmetic |
+| `optiforge` | Folding, DCE, LICM, then module verification |
+
+The explicit equivalent is
+`-passes='function(optiforge-constant-folding,optiforge-dce,optiforge-licm),verify'`.
+The named pipeline makes one ordered sweep, not an arbitrary fixed point.
+
+Compile and analyze a C++ example:
+
+```bash
 /usr/lib/llvm-21/bin/clang++ -std=c++17 -O0 -S -emit-llvm \
   examples/loops.cpp -o build/loops.ll
 /usr/lib/llvm-21/bin/opt \
   -load-pass-plugin=./build/lib/OptiForgePlugin.so \
-  -passes='function(optiforge-analyze)' -verify-each \
-  -disable-output build/loops.ll
+  -passes=optiforge-analyze -verify-each -disable-output build/loops.ll
 ```
 
-`sum_array` reports one loop; `nested_sum` reports two loops with maximum
-depth two. At `-O0`, source locals are usually represented by stack loads and
-stores. Our restricted integer hints do not look through memory, so zero hints
-on these examples are expected. Source constants can already be folded by
-Clang; use the hand-written IR fixtures to see deterministic opportunities:
+`sum_array` reports one loop; `nested_sum` reports two. Diagnostics go to stderr.
+Clang `-O0` typically adds `optnone` and stack accesses. Diagnostic passes still
+run, while transformations respect the optimization opt-out. Hand-written
+fixtures expose opportunities that the frontend may already fold or delete.
+
+## Optimization Passes
+
+| Pass | Initial supported scope | Deliberate exclusions |
+| --- | --- | --- |
+| Constant folding | Scalar literal-integer `add/sub/mul/and/or/xor`; exact-width APInt; proven `nsw`/`nuw` | Poison/undef operands, wrap-flag violations, `or disjoint`, division, shifts, FP, vectors |
+| DCE | Restricted integer operations and pure SSA classes; unused results plus LLVM safety predicate | Memory, calls, allocations, terminators, dead stores/blocks, dead SSA cycles |
+| LICM | Used unflagged scalar `add/sub/mul/and/or/xor`; preheader, operand dominance, speculation safety | Memory, calls, flagged arithmetic, division, shifts, FP, vectors, absent preheaders |
+
+Example before folding and DCE:
+
+```llvm
+define i32 @example(i32 %x) {
+  %result = add i32 10, 20
+  %dead = mul i32 %x, 6
+  %dead_user = add i32 %dead, 1
+  ret i32 %result
+}
+```
+
+After:
+
+```llvm
+define i32 @example(i32 %x) {
+  ret i32 30
+}
+```
+
+LICM moves invariant arithmetic into an existing preheader; changing its
+execution frequency requires speculation and dominance checks, even for
+zero-iteration loops. [Optimization documentation](docs/optimizations.md)
+includes LICM placement examples and the semantic boundaries of all three passes.
+
+## Testing
 
 ```bash
-/usr/lib/llvm-21/bin/opt \
-  -load-pass-plugin=./build/lib/OptiForgePlugin.so \
-  -passes=optiforge-analyze -verify-each \
-  -disable-output tests/analysis/loops.ll
+cmake --build build --target check-optiforge
 ```
 
-The `single_loop` function has 4 arithmetic instructions, 4 basic blocks,
-1 loop, and 2 unique potential opportunity instructions. Hints can overlap and
-are not semantic proofs or speedup predictions. The pass performs no folding,
-deletion, hoisting, or IR normalization.
+Alternatively, after building, use `ctest --test-dir build --output-on-failure`.
+The suite currently contains **22 lit test files**, including:
 
-## Constant folding and dead code elimination
+- Exact IR output, unsupported-case preservation, `.ll`/`.bc`, `optnone`, and verifier checks.
+- Arithmetic and natural-loop reports, nested/conditional/zero-iteration loops, and missing preheaders.
+- An exhaustive Python oracle for 3,840 four-bit arithmetic/flag cases.
+- Compiled baseline/transformed checks against unsigned C++ references, including observable stores.
+- Named/explicit pipeline equivalence and analysis invalidation.
+- A fast benchmark-runner regression checking statistics, reports, compilation, and correctness.
 
-Run either pass independently inside Ubuntu:
+The [CI workflow](.github/workflows/ci.yml) builds Release and Debug configurations
+with matching LLVM 21 packages on Ubuntu 26.04. CI runs correctness tests and the
+small runner regression; it does not assert speedup or run the full benchmark.
 
-```bash
-cmake --build build -j2
-/usr/lib/llvm-21/bin/opt \
-  -load-pass-plugin=./build/lib/OptiForgePlugin.so \
-  -passes=optiforge-constant-folding -verify-each -S \
-  tests/constant_folding/positive.ll -o build/folded.ll
-/usr/lib/llvm-21/bin/opt \
-  -load-pass-plugin=./build/lib/OptiForgePlugin.so \
-  -passes=optiforge-dce -verify-each -S \
-  tests/dead_code_elimination/chains.ll -o build/dce.ll
-```
-
-To check their interaction, list both passes explicitly:
-
-```bash
-/usr/lib/llvm-21/bin/opt \
-  -load-pass-plugin=./build/lib/OptiForgePlugin.so \
-  -passes='function(optiforge-constant-folding,optiforge-dce)' \
-  -verify-each -S tests/integration/folding-dce.ll -o build/folded-dce.ll
-```
-
-In the `example` function, `%result = add i32 10, 20` folds to `30`, and
-the unused arithmetic chain is deleted, leaving `ret i32 30`. Folding alone
-leaves nonconstant dead instructions; DCE alone does not fold constants.
-The `optnone` example remains unchanged: unlike diagnostic passes, our
-transforming passes respect the New Pass Manager's optimization opt-out.
-The equivalent named module pipeline is `-passes=optiforge`; it also appends
-LLVM's verifier. See [Phase 6](docs/phase6.md) for `.ll`/`.bc` commands and tests.
-
-Folding supports scalar integer `add/sub/mul/and/or/xor` with literal integer
-operands, including provably safe `nsw`/`nuw` arithmetic. Unsupported cases and
-flag violations remain unchanged. DCE supports a limited set of pure SSA
-operations and preserves every memory operation, call, and terminator. Neither
-pass calls LLVM's existing optimization passes.
-
-## Loop-invariant code motion
-
-```bash
-/usr/lib/llvm-21/bin/opt \
-  -load-pass-plugin=./build/lib/OptiForgePlugin.so \
-  -passes=optiforge-licm -verify-each -S \
-  tests/licm/hoist.ll -o build/hoisted.ll
-```
-
-LICM supports used scalar `add/sub/mul/and/or/xor` without poison-generating
-flags. It requires an existing loop preheader, invariant operands available at
-the insertion point, dominance, and LLVM's speculation-safety predicate. No
-loads, stores, calls, shifts, divisions, FP, or vector arithmetic are hoisted.
-See [Phase 5](docs/phase5.md) for the safety argument and nested-loop behavior.
-
-## Benchmarks and measured results
+## Performance Results
 
 ```bash
 python3 benchmarks/run_benchmarks.py --output results/local-run
 ```
 
-The [methodology](docs/benchmarking.md) explains matched flags, correctness
-checks, calibration, medians, and MAD. The committed [measured report](results/phase7/report.md)
-includes raw CSV samples and environment metadata. On the recorded i5-13500HX
-WSL run, controlled comparisons showed approximately 1-18% lower median runtime;
-the artificial repeated-arithmetic fixture had the largest change. These
-observations are not claims of superiority over optimized production compilers.
-All four standard `-O2` object pairs were byte-identical; small measured timing
-differences there are noise, not added optimization benefit.
+Use a new output directory. Defaults are nine samples per variant, two warmups,
+fixed-seed pair ordering, and shared calibration targeting 50 ms per kernel call.
+The [methodology](docs/benchmarking.md) explains matched settings and measurement
+limitations. The [committed report](results/phase7/report.md),
+[raw samples](results/phase7/samples.csv), [summary](results/phase7/summary.csv),
+and [environment/commands](results/phase7/metadata.json) describe actual results
+from an i5-13500HX under Ubuntu WSL2 with LLVM 21.1.8 on 2026-10-14.
 
-## Tests
+Controlled mode uses identical prepared IR and `-O0` backend settings; only the
+custom pipeline differs. The recorded median kernel times were:
 
-```bash
-cmake --build build --target check-optiforge
-ctest --test-dir build --output-on-failure
-```
+| Workload | Baseline ms | Custom ms | Runtime reduction | Baseline/custom MAD ms |
+| --- | --- | --- | --- | --- |
+| Array processing | 85.341 | 72.560 | 14.98% | 4.023 / 1.689 |
+| Numerical recurrence | 76.928 | 75.937 | 1.29% | 1.038 / 0.159 |
+| Nested loops | 69.033 | 64.139 | 7.09% | 1.033 / 1.601 |
+| Artificial repeated arithmetic | 114.490 | 93.571 | 18.27% | 0.814 / 0.610 |
 
-Both commands run the same lit suite; either is sufficient. Tests cover loading
-the plugin, the explicit function pipeline and shorthand pipeline, text and
-bitcode input, declaration-only modules, `optnone` functions, rejection of an
-unknown pass name, IR verification, and exact comparison against canonicalized
-unchanged IR. FileCheck verifies diagnostic output. No performance claims are
-made, and no optimization pass is invoked by the custom implementation.
+These are local observations, without a significance claim. The small numerical
+change is comparable to observed variation. Different rows may use different
+calibrated repetition counts; compare variants within a row.
 
-Phase 2 tests additionally check exact arithmetic, instruction, block, loop,
-depth, and opportunity counts on hand-written IR; nested loops; missing
-preheaders; poison/undef; excluded flags and operations; unreachable blocks;
-and compilation plus analysis of both C++ examples. Analysis runs on `.ll` and
-`.bc` and preserves canonicalized IR byte for byte.
+Standard mode gives both variants the same `default<O2>` pipeline and `-O2`
+backend compilation. **All four standard-mode kernel object pairs were
+byte-identical** ([SHA-256 audit](results/phase7/artifact_hashes.json)); their small
+timing differences are measurement noise. The controlled results do not show
+that these passes outperform production LLVM optimization.
 
-Phases 3 and 4 add before/after checks for supported transformations, exact
-unchanged-IR checks for excluded operations, wrap and flag boundaries, i1/i128,
-reverse block order, deletion chains, live users, memory/call preservation,
-`optnone`, and analysis cache invalidation. An exhaustive Python oracle checks
-all 3,840 combinations of i4 inputs, supported opcodes, and applicable wrap
-flags. A compiled harness checks 100 input pairs against an unsigned C++
-reference for both baseline and transformed code, including an observable
-store. Both executables use the same Clang `-O0` settings; this is a correctness
-test, not a benchmark.
+Static IR instruction counts and object sizes are also recorded. IR counts
+are not dynamic CPU instruction counts; hoisting can change execution frequency
+without changing the static count.
 
-Build the default target before running CTest. Ubuntu's `llvm-21-tools` provides
-lit at `/usr/lib/llvm-21/bin/lit`; another LLVM distribution may
-need `-DOPTIFORGE_LIT=/path/to/lit.py` at configuration time.
+## Limitations
 
-## Files and LLVM concepts
+The verifier establishes IR structure, not semantic equivalence. Correctness
+rests on restricted transformation contracts, LLVM safety utilities, and tests;
+there is no formal proof for arbitrary LLVM IR. Unsupported opportunities remain.
+Analysis opportunity counts are hints, not transformation guarantees.
 
-| File | Purpose |
-| --- | --- |
-| `CMakeLists.txt` | Finds LLVM, checks Clang version, builds the plugin, wires lit/CTest |
-| `include/HelloPass.h` | Declares the minimal function pass |
-| `lib/HelloPass.cpp` | Prints a function name and preserves every analysis |
-| `include/IRAnalysisPass.h` | Defines the cached statistics result and report pass |
-| `lib/IRAnalysisPass.cpp` | Counts instructions, queries LoopInfo, and reports hints |
-| `include/ConstantFoldingPass.h`, `lib/ConstantFoldingPass.cpp` | Custom restricted integer evaluation and dependent-user worklist |
-| `include/DeadCodeEliminationPass.h`, `lib/DeadCodeEliminationPass.cpp` | Restricted trivial DCE and producer worklist |
-| `tools/OptiForgePlugin.cpp` | Exports the plugin entry point and registers its pipeline name |
-| `scripts/setup_check.py` | Checks tool versions and development/test dependencies |
-| `tests/lit*.py*` | Configures LLVM's lit test runner and matching tool paths |
-| `tests/integration/*.ll` | Small IR examples and executable regression checks |
-| `tests/analysis/` | Deterministic analysis tests and C++ compilation checks |
-| `tests/constant_folding/`, `tests/dead_code_elimination/` | Transformation edge cases and integer oracle |
-| `examples/*.cpp` | Arithmetic, branch, single-loop, and nested-loop source examples |
-| `docs/phase1.md` | Explains registration, preservation, and troubleshooting |
-| `docs/environment.md` | Records the observed tool versions and Phase 1 validation |
-| `docs/phase2.md` | Explains IR, analysis APIs, counting rules, and limitations |
-| `docs/phases3-4.md` | Explains transformation algorithms, semantics, and limitations |
-| `include/LoopInvariantCodeMotionPass.h`, `lib/LoopInvariantCodeMotionPass.cpp` | Custom conservative LICM |
-| `tests/licm/`, `docs/phase5.md` | LICM correctness cases and safety explanation |
+There is no memory optimization, loop canonicalization inside the custom
+pipeline, general constant propagation, dead-cycle elimination, automatic Clang
+insertion, target tuning, or profitability model. LICM's simple repeated scan can
+be quadratic. The tested ABI is Linux x86_64 with matching LLVM 21 components.
+WSL scheduling and host load affect timing; full methodology and environment
+details accompany every retained benchmark claim.
 
-`PassInfoMixin` supplies the boilerplate expected by the New Pass Manager.
-`run()` is called for each defined function. `PassBuilder` maps the name
-`optiforge-hello` to our pass. `llvmGetPassPluginInfo()` is the entry point `opt`
-loads from the shared library. `PreservedAnalyses::all()` tells LLVM that this
-pass changed nothing. Transformations return `PreservedAnalyses::none()` when
-they change instructions, conservatively invalidating cached statistics.
+## Future Improvements
 
-## References
+Potential extensions include Alive2 validation, more integer operations with
+explicit poison semantics, faster invariant discovery, carefully analyzed load
+hoisting with MemorySSA/alias analysis, additional LLVM versions, and hardware
+counter measurements. These are proposals, not implemented features.
 
-- [LLVM: Writing a New Pass Manager pass](https://llvm.org/docs/WritingAnLLVMNewPMPass.html)
-- [LLVM: Using the New Pass Manager](https://llvm.org/docs/NewPassManager.html)
-- [Ubuntu: available LLVM/Clang versions](https://ubuntu.com/developers/docs/reference/availability/llvm/)
+## Documentation and Interview Preparation
 
-Phases 1-7 are implemented. Phase 8 completes release documentation and CI.
+- [Architecture](docs/architecture.md) and [optimization contracts](docs/optimizations.md).
+- [IR/SSA walkthrough](docs/phase2.md), [folding/DCE](docs/phases3-4.md), [LICM](docs/phase5.md), and [pipeline](docs/phase6.md).
+- [Benchmark methodology](docs/benchmarking.md) and [interview questions/resume bullet](docs/interview.md).
+- [Release notes and validation](docs/release.md), [changelog](CHANGELOG.md), and [contributing](CONTRIBUTING.md).
+
+Primary references: [LLVM New Pass Manager](https://llvm.org/docs/NewPassManager.html),
+[LLVM language reference](https://llvm.org/docs/LangRef.html),
+[LLVM loop terminology](https://llvm.org/docs/LoopTerminology.html).
